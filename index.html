@@ -1,0 +1,404 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Polygon Offset Playground</title>
+<meta name="description" content="Interactive demo: polygon offsetting with self-intersection removal. Drag the vertices and watch the naive method fail on concave geometry.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap">
+<style>
+:root{
+  --bg:#0E1416; --panel:#151E21; --panel-2:#1B262A; --line:#27353A;
+  --ink:#E6EEF0; --ink-2:#9BB0B6; --ink-3:#7A9099;
+  --src:#6C7F87;          /* original polygon */
+  --naive:#E0715F;        /* naive offset */
+  --robust:#57C2A8;       /* robust offset */
+  --hit:#E8B84B;          /* intersections */
+  --sans:'Archivo',system-ui,sans-serif; --mono:'JetBrains Mono',ui-monospace,monospace;
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);-webkit-font-smoothing:antialiased}
+.wrap{max-width:1180px;margin:0 auto;padding:28px 16px 64px}
+header{max-width:70ch}
+.eyebrow{font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-3)}
+h1{font-size:clamp(26px,4.6vw,40px);font-weight:700;letter-spacing:-.025em;margin:10px 0 0;text-wrap:balance}
+.dek{color:var(--ink-2);font-size:16.5px;line-height:1.6;margin-top:14px}
+.dek code{font-family:var(--mono);font-size:.88em;color:var(--ink);background:var(--panel-2);padding:1px 5px;border-radius:4px}
+
+.stage{margin-top:26px;display:grid;grid-template-columns:1fr 260px;gap:16px;align-items:start}
+@media(max-width:820px){.stage{grid-template-columns:1fr}}
+.canvas-card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:10px;position:relative}
+canvas{width:100%;height:auto;display:block;border-radius:8px;touch-action:none;cursor:grab}
+canvas.dragging{cursor:grabbing}
+
+.side{display:grid;gap:12px}
+.ctl{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px 15px}
+.ctl h2{font-size:11px;font-family:var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--ink-3);margin:0 0 10px;font-weight:600}
+label.row{display:flex;align-items:center;gap:9px;font-size:13.5px;color:var(--ink-2);cursor:pointer;padding:4px 0}
+label.row input{accent-color:var(--robust);width:15px;height:15px;cursor:pointer}
+.swatch{width:11px;height:11px;border-radius:3px;flex:0 0 auto}
+input[type=range]{width:100%;accent-color:var(--robust);cursor:pointer}
+.val{font-family:var(--mono);font-size:12.5px;color:var(--ink);font-variant-numeric:tabular-nums}
+.shapes{display:flex;flex-wrap:wrap;gap:6px}
+.shapes button{font-family:var(--mono);font-size:11px;padding:6px 9px;border-radius:6px;border:1px solid var(--line);background:var(--panel-2);color:var(--ink-2);cursor:pointer}
+.shapes button:hover,.shapes button[aria-pressed=true]{border-color:var(--robust);color:var(--robust)}
+.readout{font-family:var(--mono);font-size:12px;line-height:1.85;color:var(--ink-2)}
+.readout b{color:var(--ink);font-weight:600;font-variant-numeric:tabular-nums}
+.readout .bad{color:var(--naive)}
+.readout .good{color:var(--robust)}
+.note{margin-top:26px;max-width:70ch;color:var(--ink-2);font-size:15.5px;line-height:1.65}
+.note h3{color:var(--ink);font-size:17px;margin:22px 0 8px}
+.note ol{padding-left:20px} .note li{margin-top:6px}
+footer{margin-top:40px;padding-top:18px;border-top:1px solid var(--line);font-family:var(--mono);font-size:11.5px;color:var(--ink-3)}
+footer a{color:var(--ink-2)}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <div class="eyebrow">Computational geometry · interactive</div>
+  <h1>Polygon offset, and why the obvious method is wrong</h1>
+  <p class="dek">Offsetting a polygon looks like moving every vertex outward along its angle bisector. It is the first thing you would write, and it is wrong. At a sharp corner the bisector runs away toward infinity; at a concave corner the curve folds back through the shape. What you get is not at the distance you asked for — and in CAD or cutting, that distance <em>is</em> the point: it is the seam allowance, the tool radius, the kerf. The readout measures how far each method actually lands from the requested offset. <strong>Drag any vertex</strong> and move the slider.</p>
+</header>
+
+<div class="stage">
+  <div class="canvas-card">
+    <canvas id="c" width="1600" height="1100" aria-label="Interactive polygon offset demonstration"></canvas>
+  </div>
+
+  <div class="side">
+    <div class="ctl">
+      <h2>Offset distance</h2>
+      <input type="range" id="dist" min="-90" max="90" value="68" step="1">
+      <div class="val" id="distv">+68 px</div>
+    </div>
+
+    <div class="ctl">
+      <h2>Show</h2>
+      <label class="row"><input type="checkbox" id="showSrc" checked><span class="swatch" style="background:var(--src)"></span>Original polygon</label>
+      <label class="row"><input type="checkbox" id="showNaive" checked><span class="swatch" style="background:var(--naive)"></span>Naive offset</label>
+      <label class="row"><input type="checkbox" id="showRobust" checked><span class="swatch" style="background:var(--robust)"></span>Robust offset</label>
+      <label class="row"><input type="checkbox" id="showHits" checked><span class="swatch" style="background:var(--hit)"></span>Self-intersections</label>
+    </div>
+
+    <div class="ctl">
+      <h2>Shape</h2>
+      <div class="shapes" id="shapes"></div>
+    </div>
+
+    <div class="ctl">
+      <h2>Readout</h2>
+      <div class="readout" id="readout"></div>
+    </div>
+  </div>
+</div>
+
+<div class="note">
+  <h3>What the robust pass actually does</h3>
+  <ol>
+    <li>Offset every <em>edge</em> along its own normal, instead of moving vertices along the angle bisector.</li>
+    <li>Close the gap at convex turns with a circular arc, and let reflex turns overrun — they will be cleaned up next.</li>
+    <li>Discard every point of the raw offset curve whose distance to the <em>original</em> polygon is less than the offset distance. This is what removes the inverted lobes, and it is the step the naive method has no equivalent for.</li>
+    <li>Re-stitch the surviving runs into closed loops. A shape with a narrow neck legitimately splits into two loops — try the <code>neck</code> preset and push the distance past −30.</li>
+  </ol>
+  <p style="margin-top:14px">On the star at +68 the naive result misses the requested distance by more than 120 px at the points, while the robust one is exact. The yellow markers appear when the raw curve genuinely crosses itself. Everything here is plain JavaScript on a canvas — no geometry library.</p>
+</div>
+
+<footer>
+  Built by Marcela Sampaio · <a href="https://github.com/marcelaSampaio">github.com/marcelaSampaio</a>
+</footer>
+</div>
+
+<script>
+(function(){
+"use strict";
+var TAU = Math.PI*2;
+
+/* ---------- vector helpers ---------- */
+function sub(a,b){return {x:a.x-b.x, y:a.y-b.y};}
+function add(a,b){return {x:a.x+b.x, y:a.y+b.y};}
+function mul(a,s){return {x:a.x*s, y:a.y*s};}
+function len(a){return Math.hypot(a.x,a.y);}
+function norm(a){var l=len(a)||1; return {x:a.x/l, y:a.y/l};}
+function cross(a,b){return a.x*b.y - a.y*b.x;}
+function dot(a,b){return a.x*b.x + a.y*b.y;}
+
+function signedArea(p){
+  var s=0;
+  for(var i=0;i<p.length;i++){var q=p[(i+1)%p.length]; s += p[i].x*q.y - q.x*p[i].y;}
+  return s/2;
+}
+function ensureCCW(p){ return signedArea(p) < 0 ? p.slice().reverse() : p; }
+
+/* distance from point to a segment */
+function distPtSeg(p,a,b){
+  var ab=sub(b,a), t=dot(sub(p,a),ab)/(dot(ab,ab)||1);
+  t=Math.max(0,Math.min(1,t));
+  return len(sub(p, add(a, mul(ab,t))));
+}
+/* min distance from point to closed polygon boundary */
+function distToPoly(p,poly){
+  var m=Infinity;
+  for(var i=0;i<poly.length;i++){
+    var d=distPtSeg(p, poly[i], poly[(i+1)%poly.length]);
+    if(d<m) m=d;
+  }
+  return m;
+}
+/* even-odd point in polygon */
+function pointInPoly(p,poly){
+  var inside=false;
+  for(var i=0,j=poly.length-1;i<poly.length;j=i++){
+    var a=poly[i], b=poly[j];
+    if(((a.y>p.y)!==(b.y>p.y)) && (p.x < (b.x-a.x)*(p.y-a.y)/((b.y-a.y)||1e-12) + a.x)) inside=!inside;
+  }
+  return inside;
+}
+/* segment intersection, proper crossings only */
+function segInt(p1,p2,p3,p4){
+  var d1=sub(p2,p1), d2=sub(p4,p3), den=cross(d1,d2);
+  if(Math.abs(den)<1e-10) return null;
+  var t=cross(sub(p3,p1),d2)/den, u=cross(sub(p3,p1),d1)/den;
+  if(t<=1e-9||t>=1-1e-9||u<=1e-9||u>=1-1e-9) return null;
+  return {x:p1.x+d1.x*t, y:p1.y+d1.y*t};
+}
+function selfIntersections(pts, closed){
+  var out=[], n=pts.length, lim = closed? n : n-1;
+  for(var i=0;i<lim;i++){
+    for(var j=i+2;j<lim;j++){
+      if(closed && i===0 && j===lim-1) continue;
+      var h=segInt(pts[i],pts[(i+1)%n],pts[j],pts[(j+1)%n]);
+      if(h) out.push(h);
+    }
+  }
+  return out;
+}
+
+/* ---------- the naive offset: move each vertex along its angle bisector ---------- */
+function offsetNaive(poly,d){
+  var n=poly.length, out=[];
+  for(var i=0;i<n;i++){
+    var prev=poly[(i-1+n)%n], cur=poly[i], next=poly[(i+1)%n];
+    var e1=norm(sub(cur,prev)), e2=norm(sub(next,cur));
+    var n1={x:e1.y,y:-e1.x}, n2={x:e2.y,y:-e2.x};   // outward normals for CCW
+    var bis=norm(add(n1,n2));
+    var cosHalf=Math.max(0.12, Math.sqrt(Math.max(0,(1+dot(n1,n2))/2)));
+    out.push(add(cur, mul(bis, d/cosHalf)));
+  }
+  return out;
+}
+
+/* ---------- the robust offset: edge offset + arc joins + miter at reflex + distance filter ---------- */
+function lineInt(p1,d1,p2,d2){           // infinite-line intersection
+  var den=cross(d1,d2);
+  if(Math.abs(den)<1e-9) return null;
+  var t=cross(sub(p2,p1),d2)/den;
+  return {x:p1.x+d1.x*t, y:p1.y+d1.y*t};
+}
+function rawOffset(poly,d){
+  var n=poly.length, ARC=18, MITER=Math.abs(d)*8+60, i;
+  // 1. offset every edge along its own normal
+  var seg=[];
+  for(i=0;i<n;i++){
+    var cur=poly[i], next=poly[(i+1)%n];
+    var e=norm(sub(next,cur)), nrm={x:e.y,y:-e.x};
+    seg.push({a:add(cur,mul(nrm,d)), b:add(next,mul(nrm,d)), e:e, v:next, nrm:nrm});
+  }
+  // 2. resolve each join: arc on convex turns, trim to the intersection on reflex ones
+  var joins=new Array(n);
+  for(i=0;i<n;i++){
+    var s1=seg[i], s2=seg[(i+1)%n], turn=cross(s1.e,s2.e);
+    joins[i]=null;
+    if(Math.abs(turn)<1e-9) continue;
+    var convex = d>=0 ? turn>0 : turn<0;
+    if(convex){
+      var a0=Math.atan2(s1.nrm.y,s1.nrm.x), a1=Math.atan2(s2.nrm.y,s2.nrm.x), da=a1-a0;
+      while(da> Math.PI) da-=TAU; while(da<-Math.PI) da+=TAU;
+      var arc=[];
+      for(var k=1;k<ARC;k++){
+        var ang=a0+da*(k/ARC);
+        arc.push(add(s1.v,{x:Math.cos(ang)*d, y:Math.sin(ang)*d}));
+      }
+      joins[i]=arc;
+    }else{
+      var X=lineInt(s1.a,s1.e,s2.a,s2.e);      // the two offset edges cross here
+      if(X && len(sub(X,s1.v))<MITER){ s1.b=X; s2.a=X; joins[i]=[]; }
+    }
+  }
+  // 3. densify, so the distance filter downstream has enough samples
+  var pts=[];
+  for(i=0;i<n;i++){
+    var s=seg[i], L=len(sub(s.b,s.a)), steps=Math.max(1,Math.ceil(L/5));
+    for(var t=0;t<steps;t++) pts.push(add(s.a, mul(sub(s.b,s.a), t/steps)));
+    pts.push(s.b);
+    if(joins[i] && joins[i].length) pts=pts.concat(joins[i]);
+  }
+  return pts;
+}
+function robustOffset(poly,d){
+  var raw=rawOffset(poly,d);
+  if(Math.abs(d)<0.5) return {loops:[poly.slice()], raw:raw, dropped:0};
+  var ad=Math.abs(d), tol=ad*0.03+1.0;
+  // keep only points that are genuinely `d` away from the ORIGINAL boundary, on the right side
+  var keep=raw.map(function(p){
+    if(distToPoly(p,poly) < ad-tol) return false;
+    return d>=0 ? !pointInPoly(p,poly) : pointInPoly(p,poly);
+  });
+  var dropped=keep.filter(function(k){return !k;}).length;
+  if(dropped===0) return {loops:[raw], raw:raw, dropped:0};
+  // re-stitch surviving runs into loops, starting just after a gap
+  var loops=[], cur=[], n=raw.length, start=keep.indexOf(false);
+  for(var s=0;s<n;s++){
+    var i=(start+s)%n;
+    if(keep[i]) cur.push(raw[i]);
+    else { if(cur.length>2) loops.push(cur); cur=[]; }
+  }
+  if(cur.length>2) loops.push(cur);
+  if(!loops.length) loops=[raw];
+  return {loops:loops, raw:raw, dropped:dropped};
+}
+
+/* ---------- shapes ---------- */
+var SHAPES = {
+  "L-bend": [{x:300,y:250},{x:900,y:250},{x:900,y:520},{x:640,y:520},{x:640,y:880},{x:300,y:880}],
+  "star": (function(){
+    var p=[],cx=780,cy=560,R=330,r=140;
+    for(var i=0;i<10;i++){var a=-Math.PI/2+i*Math.PI/5, rad=i%2?r:R;
+      p.push({x:cx+Math.cos(a)*rad, y:cy+Math.sin(a)*rad});}
+    return p;
+  })(),
+  "neck": [{x:330,y:230},{x:760,y:230},{x:760,y:500},{x:860,y:520},{x:860,y:250},{x:1260,y:250},
+           {x:1260,y:900},{x:860,y:900},{x:860,y:640},{x:760,y:620},{x:760,y:900},{x:330,y:900}],
+  "notch": [{x:340,y:260},{x:1180,y:260},{x:1180,y:880},{x:820,y:880},{x:820,y:600},
+            {x:700,y:600},{x:700,y:880},{x:340,y:880}]
+};
+
+/* ---------- state + render ---------- */
+var cvs=document.getElementById('c'), ctx=cvs.getContext('2d');
+var poly=ensureCCW(SHAPES["star"].map(function(p){return {x:p.x,y:p.y};}));
+var d=68, drag=-1, shapeName="star";
+var ui={
+  src:document.getElementById('showSrc'), naive:document.getElementById('showNaive'),
+  robust:document.getElementById('showRobust'), hits:document.getElementById('showHits'),
+  dist:document.getElementById('dist'), distv:document.getElementById('distv'),
+  read:document.getElementById('readout'), shapes:document.getElementById('shapes')
+};
+
+Object.keys(SHAPES).forEach(function(name){
+  var b=document.createElement('button');
+  b.textContent=name; b.setAttribute('aria-pressed', String(name===shapeName));
+  b.addEventListener('click',function(){
+    shapeName=name;
+    poly=ensureCCW(SHAPES[name].map(function(p){return {x:p.x,y:p.y};}));
+    [].forEach.call(ui.shapes.children,function(x){x.setAttribute('aria-pressed', String(x.textContent===name));});
+    draw();
+  });
+  ui.shapes.appendChild(b);
+});
+
+function path(p,close){
+  ctx.beginPath(); ctx.moveTo(p[0].x,p[0].y);
+  for(var i=1;i<p.length;i++) ctx.lineTo(p[i].x,p[i].y);
+  if(close!==false) ctx.closePath();
+}
+function css(v){return getComputedStyle(document.documentElement).getPropertyValue(v).trim();}
+
+function bandError(pts,poly,d){            // how far the result really is from distance |d|
+  var ad=Math.abs(d), worst=0, off=0;
+  for(var i=0;i<pts.length;i++){
+    var err=Math.abs(distToPoly(pts[i],poly)-ad);
+    if(err>worst) worst=err;
+    if(err>ad*0.08+1.5) off++;
+  }
+  return {worst:worst, off:off, n:pts.length};
+}
+function draw(){
+  var W=cvs.width,H=cvs.height;
+  ctx.clearRect(0,0,W,H);
+  ctx.fillStyle=css('--bg'); ctx.fillRect(0,0,W,H);
+
+  // grid
+  ctx.strokeStyle='rgba(255,255,255,.035)'; ctx.lineWidth=1;
+  for(var gx=0;gx<W;gx+=50){ctx.beginPath();ctx.moveTo(gx,0);ctx.lineTo(gx,H);ctx.stroke();}
+  for(var gy=0;gy<H;gy+=50){ctx.beginPath();ctx.moveTo(0,gy);ctx.lineTo(W,gy);ctx.stroke();}
+
+  var nv=offsetNaive(poly,d);
+  var rb=robustOffset(poly,d);
+  var hitsNaive=selfIntersections(nv,true);
+
+  if(ui.robust.checked){
+    ctx.strokeStyle=css('--robust'); ctx.lineWidth=5; ctx.lineJoin='round';
+    ctx.fillStyle='rgba(87,194,168,.10)';
+    rb.loops.forEach(function(L){ path(L); ctx.fill(); ctx.stroke(); });
+  }
+  if(ui.naive.checked){
+    ctx.strokeStyle=css('--naive'); ctx.lineWidth=3.5; ctx.setLineDash([11,8]); ctx.lineJoin='round';
+    path(nv); ctx.stroke(); ctx.setLineDash([]);
+  }
+  if(ui.src.checked){
+    ctx.strokeStyle=css('--src'); ctx.lineWidth=2.5;
+    ctx.fillStyle='rgba(108,127,135,.14)';
+    path(poly); ctx.fill(); ctx.stroke();
+  }
+  if(ui.hits.checked){
+    ctx.fillStyle=css('--hit');
+    hitsNaive.forEach(function(h){
+      ctx.beginPath(); ctx.arc(h.x,h.y,8,0,TAU); ctx.fill();
+    });
+  }
+  // handles
+  poly.forEach(function(p,i){
+    ctx.beginPath(); ctx.arc(p.x,p.y,i===drag?15:11,0,TAU);
+    ctx.fillStyle=i===drag?css('--robust'):css('--panel-2');
+    ctx.fill(); ctx.strokeStyle=css('--ink-2'); ctx.lineWidth=2.5; ctx.stroke();
+  });
+
+  var loopWord = rb.loops.length===1 ? 'loop' : 'loops';
+  var eN=bandError(nv,poly,d), eR=bandError([].concat.apply([],rb.loops),poly,d);
+  ui.read.innerHTML =
+    'vertices <b>'+poly.length+'</b> &nbsp; offset <b>'+(d>=0?'+':'')+d+'</b>px<br>'+
+    '<span style="color:var(--ink-3)">&mdash; distance error &mdash;</span><br>'+
+    'naive worst <b class="bad">'+eN.worst.toFixed(1)+'</b> px<br>'+
+    'robust worst <b class="good">'+eR.worst.toFixed(1)+'</b> px<br>'+
+    'naive pts off-band <b class="bad">'+eN.off+'</b>/'+eN.n+'<br>'+
+    '<span style="color:var(--ink-3)">&mdash; topology &mdash;</span><br>'+
+    'naive crossings <b class="bad">'+hitsNaive.length+'</b><br>'+
+    'result <b class="good">'+rb.loops.length+' '+loopWord+'</b>';
+}
+
+/* ---------- interaction ---------- */
+function toLocal(ev){
+  var r=cvs.getBoundingClientRect();
+  return {x:(ev.clientX-r.left)*(cvs.width/r.width), y:(ev.clientY-r.top)*(cvs.height/r.height)};
+}
+cvs.addEventListener('pointerdown',function(ev){
+  var p=toLocal(ev), best=-1, bd=1e9;
+  poly.forEach(function(q,i){var dd=len(sub(p,q)); if(dd<bd){bd=dd;best=i;}});
+  if(bd<40){ drag=best; cvs.setPointerCapture(ev.pointerId); cvs.classList.add('dragging'); draw(); }
+});
+cvs.addEventListener('pointermove',function(ev){
+  if(drag<0) return;
+  var p=toLocal(ev);
+  poly[drag]={x:Math.max(40,Math.min(cvs.width-40,p.x)), y:Math.max(40,Math.min(cvs.height-40,p.y))};
+  draw();
+});
+function endDrag(ev){ if(drag>=0){ drag=-1; cvs.classList.remove('dragging'); poly=ensureCCW(poly); draw(); } }
+cvs.addEventListener('pointerup',endDrag);
+cvs.addEventListener('pointercancel',endDrag);
+
+ui.dist.addEventListener('input',function(){
+  d=parseInt(ui.dist.value,10);
+  ui.distv.textContent=(d>=0?'+':'')+d+' px';
+  draw();
+});
+['src','naive','robust','hits'].forEach(function(k){ ui[k].addEventListener('change',draw); });
+
+draw();
+})();
+</script>
+</body>
+</html>
