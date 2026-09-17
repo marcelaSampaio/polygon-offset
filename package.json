@@ -1,7 +1,7 @@
 {
-  "name": "polygon-offset",
+  "name": "polygon-offset-exact",
   "version": "0.1.0",
-  "description": "Polygon offsetting that lands at the distance you asked for — with the function that proves it. Zero dependencies, TypeScript.",
+  "description": "Polygon offsetting that lands at the distance you asked for \u2014 with the function that proves it. Zero dependencies, TypeScript.",
   "keywords": [
     "polygon",
     "offset",

@@ -6,12 +6,14 @@ TypeScript, zero dependencies, ESM + CJS. 2.3 kB gzipped.
 
 **[▶ Interactive demo](https://marcelasampaio.github.io/polygon-offset/)** — drag the vertices, watch the error readout.
 
+> Published as **`polygon-offset-exact`**; the unscoped `polygon-offset` was already taken. The `-exact` is the point of the library, so it earns its place.
+
 ```bash
-npm install polygon-offset
+npm install polygon-offset-exact
 ```
 
 ```ts
-import { offsetPolygon, maxDeviation } from 'polygon-offset';
+import { offsetPolygon, maxDeviation } from 'polygon-offset-exact';
 
 const piece = [{x:0,y:0}, {x:100,y:0}, {x:100,y:60}, {x:40,y:60}, {x:40,y:140}, {x:0,y:140}];
 
@@ -32,7 +34,7 @@ The usual complaint about naive offsetting is that it self-intersects. On most r
 This library ships the naive version too — as `naiveOffsetPolygon`, so you can measure the gap yourself:
 
 ```ts
-import { offsetPolygon, naiveOffsetPolygon, maxDeviation } from 'polygon-offset';
+import { offsetPolygon, naiveOffsetPolygon, maxDeviation } from 'polygon-offset-exact';
 
 maxDeviation(naiveOffsetPolygon(star, 40), star, 40);  // 81.8
 maxDeviation(offsetPolygon(star, 40), star, 40);       // 2.8e-14
