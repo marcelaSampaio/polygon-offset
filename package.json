@@ -1,0 +1,64 @@
+{
+  "name": "polygon-offset",
+  "version": "0.1.0",
+  "description": "Polygon offsetting that lands at the distance you asked for — with the function that proves it. Zero dependencies, TypeScript.",
+  "keywords": [
+    "polygon",
+    "offset",
+    "computational-geometry",
+    "geometry",
+    "cad",
+    "seam-allowance",
+    "toolpath",
+    "buffer",
+    "inset",
+    "outset",
+    "2d"
+  ],
+  "license": "MIT",
+  "author": "Marcela Sampaio",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/marcelaSampaio/polygon-offset.git"
+  },
+  "homepage": "https://marcelasampaio.github.io/polygon-offset/",
+  "bugs": {
+    "url": "https://github.com/marcelaSampaio/polygon-offset/issues"
+  },
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "sideEffects": false,
+  "scripts": {
+    "build": "tsup src/index.ts --format esm,cjs --dts --clean --sourcemap",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "npm run typecheck && npm run test && npm run build"
+  },
+  "devDependencies": {
+    "tsup": "^8.3.5",
+    "tsx": "^4.23.13",
+    "typescript": "^5.6.3",
+    "vitest": "^2.1.8"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}
