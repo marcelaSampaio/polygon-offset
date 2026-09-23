@@ -1,5 +1,7 @@
 # polygon-offset
 
+[![npm](https://img.shields.io/npm/v/polygon-offset-exact?label=npm&color=2f7d46)](https://www.npmjs.com/package/polygon-offset-exact) [![gzipped](https://img.shields.io/bundlephobia/minzip/polygon-offset-exact?label=gzipped&color=2f7d46)](https://bundlephobia.com/package/polygon-offset-exact) ![dependencies](https://img.shields.io/badge/dependencies-0-2f7d46) [![license](https://img.shields.io/npm/l/polygon-offset-exact?color=2f7d46)](./LICENSE)
+
 Offsetting a polygon so that every point of the result is **actually** at the distance you asked for — and the function that proves it.
 
 TypeScript, zero dependencies, ESM + CJS. 2.3 kB gzipped.
